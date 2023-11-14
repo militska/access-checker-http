@@ -13,9 +13,9 @@ import (
 )
 
 type HttpChecker struct {
-	AddrCh     chan string
-	Client     *http.Client
-	FileResult *os.File
+	addrCh     chan string
+	client     *http.Client
+	fileResult *os.File
 }
 
 func NewHttpChecker() HttpChecker {
@@ -26,20 +26,20 @@ func NewHttpChecker() HttpChecker {
 	}
 
 	return HttpChecker{
-		AddrCh:     make(chan string, 10),
-		Client:     &http.Client{Timeout: 5 * time.Second},
-		FileResult: resultFile,
+		addrCh:     make(chan string, 20),
+		client:     &http.Client{Timeout: 5 * time.Second},
+		fileResult: resultFile,
 	}
 }
 
 func (c *HttpChecker) CloseResultFile() {
-	if err := c.FileResult.Close(); err != nil {
+	if err := c.fileResult.Close(); err != nil {
 		log.Println(err)
 	}
 }
 
-func (c *HttpChecker) SetData(wg *sync.WaitGroup) {
-	file, err := os.Open("source")
+func (c *HttpChecker) SetData(sourceFilePath string, wg *sync.WaitGroup) {
+	file, err := os.Open(sourceFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func (c *HttpChecker) SetData(wg *sync.WaitGroup) {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		c.AddrCh <- scanner.Text()
+		c.addrCh <- scanner.Text()
 		wg.Add(1)
 		if err != nil {
 			log.Println(err.Error())
@@ -61,19 +61,19 @@ func (c *HttpChecker) SetData(wg *sync.WaitGroup) {
 }
 
 func (c *HttpChecker) Exec(wg *sync.WaitGroup) {
-	for elem := range c.AddrCh {
+	for elem := range c.addrCh {
 		go c.execInternal(elem, wg)
 	}
 
 }
 
 func (c *HttpChecker) execInternal(addr string, wg *sync.WaitGroup) {
-	text, err := sendRequest(addr, c.Client)
+	text, err := sendRequest(addr, c.client)
 	if err != nil {
 		log.Println(err)
 	}
 
-	_, err = c.FileResult.Write([]byte(text))
+	_, err = c.fileResult.Write([]byte(text))
 	if err != nil {
 		log.Println(err)
 	}
@@ -101,5 +101,5 @@ func sendRequest(addr string, client *http.Client) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s %d %s", addr, res.StatusCode, realIp), nil
+	return fmt.Sprintf("%s %d %s\n", addr, res.StatusCode, realIp), nil
 }

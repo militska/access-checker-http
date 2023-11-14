@@ -1,12 +1,10 @@
 package main
 
 import (
-	"access-checker-http/internal/checker"
+	checkerPkg "access-checker-http/internal/checker"
+	"flag"
 	"log"
-	"os"
-	"strconv"
 	"sync"
-	"time"
 )
 
 //Написать сервис проверяющий доступность ресурсов. Сервис работает в фоне 24/7.
@@ -24,25 +22,24 @@ import (
 //ya.ru | 87.250.250.242 | 200 | Яндекс
 //www.ya.ru | ya.ru/redirect | 301 | -
 
+const DefaultSourcePath = "source"
+
+var sourceFilePath string
+
+func init() {
+	flag.StringVar(&sourceFilePath, "sourceFilePath", DefaultSourcePath, "Source file path")
+}
+
 func main() {
-	filename := "result/result_" + strconv.Itoa(int(time.Now().UnixMicro()))
-	resultFile, err := os.Create(filename)
-	if err != nil {
-		panic(err)
-	}
-
-	defer resultFile.Close()
-
-	checker := checker.NewHttpChecker()
+	checker := checkerPkg.NewHttpChecker()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	go checker.SetData(&wg)
-
+	go checker.SetData(sourceFilePath, &wg)
 	go checker.Exec(&wg)
 
 	wg.Wait()
 
-	log.Println("Shutting down server...")
+	log.Println("Shutting down app...")
 }
