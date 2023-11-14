@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
+	"access-checker-http/internal/checker"
 	"log"
-	"net/http"
-	"net/http/httptrace"
 	"os"
 	"strconv"
 	"sync"
@@ -28,84 +26,23 @@ import (
 
 func main() {
 	filename := "result/result_" + strconv.Itoa(int(time.Now().UnixMicro()))
-	f_result, err := os.Create(filename)
+	resultFile, err := os.Create(filename)
 	if err != nil {
 		panic(err)
 	}
 
-	defer f_result.Close()
+	defer resultFile.Close()
 
-	client := &http.Client{}
-
-	addrCh := make(chan string, 4)
+	checker := checker.NewHttpChecker()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go initCh(addrCh, &wg)
 
-	go func() {
-		for elem := range addrCh {
-			go exec(elem, f_result, client, &wg)
-		}
-	}()
+	go checker.SetData(&wg)
+
+	go checker.Exec(&wg)
+
 	wg.Wait()
 
 	log.Println("Shutting down server...")
-}
-
-func initCh(addrCh chan string, wg *sync.WaitGroup) {
-	file, err := os.Open("source")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-	defer wg.Done()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		addrCh <- scanner.Text()
-		wg.Add(1)
-		if err != nil {
-			log.Println(err.Error())
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Println(err)
-	}
-}
-
-func exec(addr string, resFile *os.File, client *http.Client, wg *sync.WaitGroup) {
-	text, err := sendRequest(addr, client)
-	if err != nil {
-		log.Println(err)
-	}
-
-	_, err = resFile.Write([]byte(text))
-	if err != nil {
-		log.Println(err)
-	}
-	wg.Done()
-}
-
-func sendRequest(addr string, client *http.Client) (string, error) {
-	var rip string
-
-	req, err := http.NewRequest("GET", addr, nil)
-	if err != nil {
-		return "", err
-	}
-
-	trace := &httptrace.ClientTrace{
-		GotConn: func(connInfo httptrace.GotConnInfo) {
-			rip = connInfo.Conn.RemoteAddr().String()
-		},
-	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-	res, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	return addr + " " + strconv.Itoa(res.StatusCode) + " " + rip + "\n", nil
 }
